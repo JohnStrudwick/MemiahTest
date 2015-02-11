@@ -1,0 +1,96 @@
+---
+- hosts: all
+  tasks:
+
+  - name: install the latest version of Apache
+    yum: name=httpd state=latest
+
+  - name: start Apache
+    service: name=httpd state=started
+
+  - name: install mod_ssl
+    yum: name=mod_ssl state=latest
+
+  - name: install openssl
+    yum: name=openssl  state=latest
+
+  - name: install mySQL
+    yum: name=mysql state=latest
+
+  - name: install mySQL Server
+    yum: name=mysql-server state=latest
+
+  - name: start MySQL
+    service: name=mysqld state=started
+
+  - name: install PHP
+    yum: name=php state=latest
+
+  - name: install PHP MySQL
+    yum: name=php-mysql state=latest
+ 
+  - name: Ensure Apache starts at boot
+    action:  command chkconfig httpd on
+
+  - name: Ensure MySQL starts at boot
+    action:  command chkconfig mysqld on
+
+  - name: Get Key file from github
+    authorized_key: user=root key="{{ lookup('file', '/root/.ssh/strudwick.pub') }}"
+
+  - name: Copy self signed certificates 1 of 3
+    copy: src=/root/sslcerts/ca.crt dest=/etc/pki/tls/certs/ca.crt
+
+  - name: Copy self signed certificates 2 of 3
+    copy: src=/root/sslcerts/ca.csr dest=/etc/pki/tls/private/ca.csr
+
+  - name: Copy self signed certificates 3 of 3
+    copy: src=/root/sslcerts/ca.key dest=/etc/pki/tls/private/ca.key
+
+  - name: modify ssl.conf line 1 of 2
+    lineinfile: dest=/etc/httpd/conf.d/ssl.conf regexp='^SSLCertificateFile' line='SSLCertificateFile /etc/pki/tls/certs/ca.crt'
+  - name: modify ssl.conf line 2 of 2
+    lineinfile: dest=/etc/httpd/conf.d/ssl.conf regexp='^SSLCertificateKeyFile' line='SSLCertificateFile /etc/pki/tls/private/ca.key'
+
+  - name: download wordpress
+    get_url: url=http://wordpress.org/latest.tar.gz dest=/var/www/wordpress.tar.gz
+
+  - name: unarchive wordpress
+    unarchive: src=/var/www/wordpress.tar.gz dest=/var/www copy=no
+    
+  - name: change ownership
+    action: command chown apache:apache /var/www/html/ -R
+
+  - name: add virtual host ( quick & dirty version )
+    action: shell /bin/echo '<VirtualHost *:443 192.168.0.101>' >> /etc/httpd/conf/httpd.conf
+  - name: add virtual host line
+    action: shell /bin/echo '       DocumentRoot /www/wordpress' >> /etc/httpd/conf/httpd.conf
+  - name: add virtual host line
+    action: shell /bin/echo '       SSLEngine on' >> /etc/httpd/conf/httpd.conf
+  - name: add virtual host line
+    action: shell /bin/echo '       SSLCertificateFile /etc/pki/tls/certs/ca.crt' >> /etc/httpd/conf/httpd.conf
+  - name: add virtual host line
+    action: shell /bin/echo '       SSLCertificateKeyFile /etc/pki/tls/private/ca.key' >> /etc/httpd/conf/httpd.conf
+  - name: add virtual host line
+    action: shell /bin/echo '       <Directory /var/www/wordpress>' >> /etc/httpd/conf/httpd.conf
+  - name: add virtual host line
+    action: shell /bin/echo '       AllowOverride All' >> /etc/httpd/conf/httpd.conf
+  - name: add virtual host line
+    action: shell /bin/echo '       </Directory>' >> /etc/httpd/conf/httpd.conf
+  - name: add virtual host line
+    action: shell /bin/echo '       DocumentRoot /var/www/wordpress' >> /etc/httpd/conf/httpd.conf
+  - name: add virtual host line
+    action: shell /bin/echo '       ServerName sslsite.com' >> /etc/httpd/conf/httpd.conf
+  - name: add virtual host line
+    action: shell /bin/echo '</VirtualHost>' >> /etc/httpd/conf/httpd.conf
+
+  - name: allow 443 in iptables
+    action: shell iptables -I INPUT -i eth0 -p tcp --dport 443 -m state --state NEW,ESTABLISHED -j ACCEPT
+
+  - name: save iptables
+    action: shell service iptables save
+
+  - name: restart Apache
+    service: name=httpd state=restarted
+
+
