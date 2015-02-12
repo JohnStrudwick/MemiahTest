@@ -35,7 +35,7 @@
   - name: Ensure MySQL starts at boot
     action:  command chkconfig mysqld on
 
-  - name: Get Key file from github
+  - name: Get Key file from server running Ansible
     authorized_key: user=root key="{{ lookup('file', '/root/.ssh/strudwick.pub') }}"
 
   - name: Copy self signed certificates 1 of 3
@@ -50,7 +50,22 @@
   - name: modify ssl.conf line 1 of 2
     lineinfile: dest=/etc/httpd/conf.d/ssl.conf regexp='^SSLCertificateFile' line='SSLCertificateFile /etc/pki/tls/certs/ca.crt'
   - name: modify ssl.conf line 2 of 2
-    lineinfile: dest=/etc/httpd/conf.d/ssl.conf regexp='^SSLCertificateKeyFile' line='SSLCertificateFile /etc/pki/tls/private/ca.key'
+    lineinfile: dest=/etc/httpd/conf.d/ssl.conf regexp='^SSLCertificateKeyFile' line='SSLCertificateKeyFile /etc/pki/tls/private/ca.key'
+
+  - name: modify virtual host in ssl.conf
+    lineinfile: dest=/etc/httpd/conf.d/ssl.conf regexp='^</VirtualHost>' line=' '
+  - name: add virtual host line
+    action: shell /bin/echo '       DocumentRoot /var/www/wordpress' >> /etc/httpd/conf.d/ssl.conf
+  - name: add virtual host line
+    action: shell /bin/echo '       <Directory /var/www/wordpress>' >> /etc/httpd/conf.d/ssl.conf
+  - name: add virtual host line
+    action: shell /bin/echo '       AllowOverride All' >> /etc/httpd/conf.d/ssl.conf
+  - name: add virtual host line
+    action: shell /bin/echo '       </Directory>' >> /etc/httpd/conf.d/ssl.conf
+  - name: add virtual host line
+    action: shell /bin/echo '       DocumentRoot /var/www/wordpress' >> /etc/httpd/conf.d/ssl.conf
+  - name: add virtual host line
+    action: shell /bin/echo '</VirtualHost>' >> /etc/httpd/conf.d/ssl.conf
 
   - name: download wordpress
     get_url: url=http://wordpress.org/latest.tar.gz dest=/var/www/wordpress.tar.gz
@@ -60,29 +75,6 @@
     
   - name: change ownership
     action: command chown apache:apache /var/www/html/ -R
-
-  - name: add virtual host ( quick & dirty version )
-    action: shell /bin/echo '<VirtualHost *:443 192.168.0.101>' >> /etc/httpd/conf/httpd.conf
-  - name: add virtual host line
-    action: shell /bin/echo '       DocumentRoot /www/wordpress' >> /etc/httpd/conf/httpd.conf
-  - name: add virtual host line
-    action: shell /bin/echo '       SSLEngine on' >> /etc/httpd/conf/httpd.conf
-  - name: add virtual host line
-    action: shell /bin/echo '       SSLCertificateFile /etc/pki/tls/certs/ca.crt' >> /etc/httpd/conf/httpd.conf
-  - name: add virtual host line
-    action: shell /bin/echo '       SSLCertificateKeyFile /etc/pki/tls/private/ca.key' >> /etc/httpd/conf/httpd.conf
-  - name: add virtual host line
-    action: shell /bin/echo '       <Directory /var/www/wordpress>' >> /etc/httpd/conf/httpd.conf
-  - name: add virtual host line
-    action: shell /bin/echo '       AllowOverride All' >> /etc/httpd/conf/httpd.conf
-  - name: add virtual host line
-    action: shell /bin/echo '       </Directory>' >> /etc/httpd/conf/httpd.conf
-  - name: add virtual host line
-    action: shell /bin/echo '       DocumentRoot /var/www/wordpress' >> /etc/httpd/conf/httpd.conf
-  - name: add virtual host line
-    action: shell /bin/echo '       ServerName sslsite.com' >> /etc/httpd/conf/httpd.conf
-  - name: add virtual host line
-    action: shell /bin/echo '</VirtualHost>' >> /etc/httpd/conf/httpd.conf
 
   - name: allow 443 in iptables
     action: shell iptables -I INPUT -i eth0 -p tcp --dport 443 -m state --state NEW,ESTABLISHED -j ACCEPT
